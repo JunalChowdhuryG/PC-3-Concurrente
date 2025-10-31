@@ -25,7 +25,7 @@ services:
     ports:
       - "5432:5432" 
     volumes:
-      - ./db-banco-data:/var/lib/postgresql/data
+      - ./sql-scripts/init-banco.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - shibasito-net
     healthcheck:
@@ -46,7 +46,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./db-reniec-data:/var/lib/mysql
+      - ./sql-scripts/init-reniec.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - shibasito-net
     healthcheck:
@@ -55,12 +55,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # LP2 RENIEC 
+  lp2-reniec-servicio:
+    build: ./lp2-reniec-nodejs 
+    container_name: lp2-reniec-servicio
+    networks:
+      - shibasito-net
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbit-server:5672
+      - MYSQL_HOST=db-reniec
+      - MYSQL_USER=shibasito_user
+      - MYSQL_PASSWORD=shibasito_password
+      - MYSQL_DATABASE=bd2_reniec
+    depends_on:
+      rabbit-server:
+        condition: service_healthy
+      db-reniec:
+        condition: service_healthy
+    restart: on-failure
+
 # red personalizada 
 networks:
   shibasito-net:
     driver: bridge
-
-# volumenes 
-volumes:
-  db-banco-data:
-  db-reniec-data:
