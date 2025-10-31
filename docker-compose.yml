@@ -1,0 +1,66 @@
+services:
+  # middleware
+  rabbit-server:
+    image: rabbitmq:3.13-management
+    container_name: rabbit-server
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - shibasito-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # base de datos del banco (BD1)
+  db-banco:
+    image: postgres:16
+    container_name: db-banco
+    environment:
+      POSTGRES_USER: shibasito_user
+      POSTGRES_PASSWORD: shibasito_password
+      POSTGRES_DB: bd1_banco
+    ports:
+      - "5432:5432" 
+    volumes:
+      - ./db-banco-data:/var/lib/postgresql/data
+    networks:
+      - shibasito-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shibasito_user -d bd1_banco"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # base de datos RENIEC (BD2)
+  db-reniec:
+    image: mysql:8.0
+    container_name: db-reniec
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: bd2_reniec
+      MYSQL_USER: shibasito_user
+      MYSQL_PASSWORD: shibasito_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db-reniec-data:/var/lib/mysql
+    networks:
+      - shibasito-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "shibasito_user", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# red personalizada 
+networks:
+  shibasito-net:
+    driver: bridge
+
+# volumenes 
+volumes:
+  db-banco-data:
+  db-reniec-data:
