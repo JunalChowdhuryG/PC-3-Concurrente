@@ -1,4 +1,4 @@
--- Tabla Personas 
+
 CREATE TABLE Personas (
     DNI VARCHAR(8) PRIMARY KEY,
     nombres VARCHAR(100) NOT NULL,
@@ -10,8 +10,6 @@ CREATE TABLE Personas (
     direccion VARCHAR(255)
 );
 
--- Insertar datos de ejemplo de la imagen del PDF
--- (Se infieren los apellidos de la imagen)
 INSERT INTO Personas (DNI, apell_pat, apell_mat, nombres, fecha_nac, sexo, direccion) VALUES
 ('45679812', 'GARCIA', 'FLORES', 'MARIA ELENA', '1990-07-15', 'F', 'Universitaria 1234'),
 ('78901234', 'RAMIREZ', 'QUISPE', 'JUAN CARLOS', '1985-03-22', 'M', 'San Martin 456'),
