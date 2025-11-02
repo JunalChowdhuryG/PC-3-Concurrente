@@ -5,9 +5,15 @@ services:
   rabbit-server:
     image: rabbitmq:3.13-management
     container_name: rabbit-server
+    # --- QUITAR LAS LÍNEAS DE USUARIO DE AQUÍ ---
+    # (Las líneas RABBITMQ_DEFAULT_USER/PASS se eliminan)
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      # --- AÑADIR ESTA LÍNEA ---
+      # Monta nuestro archivo de configuración para deshabilitar la seguridad
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     networks:
       - shibasito-net
     healthcheck:
@@ -16,7 +22,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- 2. Base de Datos del Banco (BD1) ---
+  # --- (db-banco y db-reniec no cambian) ---
   db-banco:
     image: postgres:16
     container_name: db-banco
@@ -35,21 +41,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # --- 3. Base de Datos de RENIEC (BD2) - (NUEVO) ---
   db-reniec:
     image: mysql:8.0
     container_name: db-reniec
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: root_password # Clave de root
+      MYSQL_ROOT_PASSWORD: root_password
       MYSQL_DATABASE: bd2_reniec
       MYSQL_USER: shibasito_user
       MYSQL_PASSWORD: shibasito_password
     ports:
-      - "3306:3306" # Expone el puerto de MySQL a tu PC
+      - "3306:3306"
     volumes:
-      # Carga el script SQL al iniciar (modo efímero)
       - ./sql-scripts/init-reniec.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - shibasito-net
@@ -59,14 +62,19 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- 4. Servicio LP1 BANCO (Java) ---
+  # --- 4. Servicio LP1 BANCO (Python) ---
   lp1-banco-servicio:
-    build: ./lp1-banco-java
+    build: ./lp1-banco-python
     container_name: lp1-banco-servicio
     networks:
       - shibasito-net
-    ports:
-      - "8080:8080"
+    environment:
+      # --- REVERTIR A GUEST ---
+      - RABBITMQ_URL=amqp://guest:guest@rabbit-server:5672
+      - DB_HOST=db-banco
+      - DB_NAME=bd1_banco
+      - DB_USER=shibasito_user
+      - DB_PASS=shibasito_password
     depends_on:
       rabbit-server:
         condition: service_healthy
@@ -74,14 +82,14 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  # --- 5. Servicio LP2 RENIEC (Node.js) - (NUEVO) ---
+  # --- 5. Servicio LP2 RENIEC (Node.js) ---
   lp2-reniec-servicio:
-    build: ./lp2-reniec-nodejs  # Construye desde la nueva carpeta
+    build: ./lp2-reniec-nodejs
     container_name: lp2-reniec-servicio
     networks:
       - shibasito-net
     environment:
-      # Pasamos las URLs de los otros servicios (los nombres deben coincidir)
+      # --- REVERTIR A GUEST ---
       - RABBITMQ_URL=amqp://guest:guest@rabbit-server:5672
       - MYSQL_HOST=db-reniec
       - MYSQL_USER=shibasito_user
@@ -89,12 +97,11 @@ services:
       - MYSQL_DATABASE=bd2_reniec
     depends_on:
       rabbit-server:
-        condition: service_healthy # Espera a que RabbitMQ esté listo
+        condition: service_healthy
       db-reniec:
-        condition: service_healthy # Espera a que la BD Reniec esté lista
+        condition: service_healthy
     restart: on-failure
 
-# --- Red Personalizada ---
 networks:
   shibasito-net:
     driver: bridge

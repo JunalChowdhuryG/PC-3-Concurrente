@@ -5,12 +5,15 @@ import uuid
 import json
 import os
 import threading
-import time # Para el time.sleep
+import time 
+
+# --- CONFIGURACIÓN ---
+RABBITMQ_USER = 'guest'
+RABBITMQ_PASS = 'guest'
+TU_IP_WIFI = '10.237.90.216' # ¡Esta es la IP de tu Wi-Fi que encontraste!
 
 # --- Lógica del Cliente RPC para RabbitMQ ---
-
 class RpcClient:
-    """Maneja la conexión y la lógica RPC en un solo hilo."""
     def __init__(self, host):
         self.host = host
         self.connection = None
@@ -20,8 +23,16 @@ class RpcClient:
         self.corr_id = None
         
         try:
+            # Añadir credenciales a la conexión
+            self.credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
             self.connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=self.host))
+                pika.ConnectionParameters(
+                    host=self.host,
+                    credentials=self.credentials,
+                    connection_attempts=5, 
+                    retry_delay=3
+                )
+            )
             self.channel = self.connection.channel()
             result = self.channel.queue_declare(queue='', exclusive=True)
             self.callback_queue = result.method.queue
@@ -34,6 +45,7 @@ class RpcClient:
             print(f"Error fatal en RPCClient.connect: {e}")
             raise
 
+    # ... (El resto de la clase RpcClient: close, on_response, call... no cambian) ...
     def close(self):
         try:
             if self.connection and self.connection.is_open:
@@ -77,7 +89,6 @@ class RpcClient:
             return {"status": "ERROR", "message": str(e)}
 
 # --- Aplicación GUI con Tkinter ---
-
 class App:
     def __init__(self, root):
         self.root = root
@@ -87,10 +98,11 @@ class App:
         self.log_area = scrolledtext.ScrolledText(root, state='disabled', height=10)
         self.log_area.pack(pady=10, padx=10, fill="x")
 
-        self.rabbit_host = 'localhost' 
+        # --- CAMBIO IMPORTANTE ---
+        self.rabbit_host = TU_IP_WIFI 
         self.log(f"Host de RabbitMQ configurado en: {self.rabbit_host}")
         
-        # Frames de GUI
+        # ... (Frames de GUI - sin cambios) ...
         reniec_frame = tk.LabelFrame(root, text="Validación RENIEC (LP2)")
         reniec_frame.pack(fill="x", padx=10, pady=5)
         tk.Label(reniec_frame, text="DNI:").grid(row=0, column=0, padx=5, pady=5)
@@ -108,6 +120,7 @@ class App:
         self.banco_cliente_id.grid(row=0, column=1, padx=5, pady=5)
         self.saldo_button = tk.Button(banco_frame, text="Consultar Saldo", command=self.consultar_saldo)
         self.saldo_button.grid(row=0, column=2, padx=5, pady=5)
+
 
     def log(self, message):
         self.log_area.config(state='normal')
@@ -132,7 +145,6 @@ class App:
                 self.log(f"<- [Hilo] Respuesta Recibida: {response}")
                 self.root.after(0, self.mostrar_respuesta, response)
             except Exception as e:
-                # Si hay un error al conectar, mostrarlo
                 self.log(f"Error en hilo RPC: {e}")
                 self.root.after(0, self.mostrar_respuesta, 
                     {"status": "ERROR", "message": f"Error en hilo RPC: {e}"})
@@ -148,18 +160,13 @@ class App:
         else:
             messagebox.showerror("Error en Respuesta", response.get("message", "Error desconocido"))
 
-    # --- Handlers de Botones ---
-
+    # ... (Handlers de botones - sin cambios) ...
     def validar_reniec(self):
         dni = self.reniec_dni.get()
         if not dni:
             messagebox.showwarning("Dato Faltante", "Por favor ingrese un DNI.")
             return
-        
         body = {"dni": dni}
-        
-        # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-        # (Sin la 'j' extra)
         self.ejecutar_rpc("reniec.validar", body)
 
     def consultar_saldo(self):
@@ -167,7 +174,6 @@ class App:
         if not cliente_id:
             messagebox.showwarning("Dato Faltante", "Por favor ingrese un ID de Cliente.")
             return
-        
         body = {"idCliente": cliente_id}
         self.ejecutar_rpc("banco.consulta.saldo", body)
 
