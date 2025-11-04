@@ -1,0 +1,82 @@
+
+services:
+  # --- 1. Base de Datos del Banco (BD1) ---
+  db-banco:
+    image: postgres:16
+    container_name: db-banco
+    environment:
+      POSTGRES_USER: shibasito_user
+      POSTGRES_PASSWORD: shibasito_password
+      POSTGRES_DB: bd1_banco
+    volumes:
+      - ./sql-scripts/init-banco.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - shibasito-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shibasito_user -d bd1_banco"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 2. Base de Datos de RENIEC (BD2) ---
+  db-reniec:
+    image: mysql:8.0
+    container_name: db-reniec
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: bd2_reniec
+      MYSQL_USER: shibasito_user
+      MYSQL_PASSWORD: shibasito_password
+    volumes:
+      - ./sql-scripts/init-reniec.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - shibasito-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "shibasito_user", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 3. Servicio LP1 BANCO (Python) ---
+  lp1-banco-servicio:
+    build: ./lp1-banco-python
+    container_name: lp1-banco-servicio
+    networks:
+      - shibasito-net
+    environment:
+      # Apunta a 'host.docker.internal' para encontrar RabbitMQ en tu PC
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672
+      - DB_HOST=db-banco
+      - DB_NAME=bd1_banco
+      - DB_USER=shibasito_user
+      - DB_PASS=shibasito_password
+    depends_on:
+      db-banco:
+        condition: service_healthy
+    restart: on-failure
+
+  # --- 4. Servicio LP2 RENIEC (Node.js) ---
+  lp2-reniec-servicio:
+    build: ./lp2-reniec-nodejs
+    container_name: lp2-reniec-servicio
+    networks:
+      - shibasito-net
+    environment:
+      # Apunta a 'host.docker.internal' para encontrar RabbitMQ en tu PC
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672
+      - MYSQL_HOST=db-reniec
+      - MYSQL_USER=shibasito_user
+      - MYSQL_PASSWORD=shibasito_password
+      - MYSQL_DATABASE=bd2_reniec
+    depends_on:
+      db-reniec:
+        condition: service_healthy
+    restart: on-failure
+
+# --- Red Personalizada ---
+# 'host.docker.internal' requiere que la red sea 'bridge' (la red por defecto)
+# por lo que no necesitamos definir una red personalizada.
+# Si 'host.docker.internal' falla, definiremos una red y usaremos la IP de tu PC.
+networks:
+  shibasito-net:
