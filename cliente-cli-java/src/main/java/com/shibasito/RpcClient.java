@@ -13,17 +13,19 @@ public class RpcClient implements AutoCloseable {
     private final Channel channel;
     private final String replyQueueName;
 
-    public RpcClient(String host) throws IOException, TimeoutException {
+    public RpcClient(String hostIp) throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(host);
-        factory.setUsername("guest");
-        factory.setPassword("guest");
+        factory.setHost(hostIp);
+        // Volvemos a 'guest', ya que 'rabbitmq.conf' ahora lo permite
+        factory.setUsername("shibasito_user");
+        factory.setPassword("shibasito_password");
 
         connection = factory.newConnection();
         channel = connection.createChannel();
-        
-        // --- CORRECCIÓN ---
-        // Declarar una cola que NO se auto-borre
+
+        // --- CORRECCIÓN CLAVE ---
+        // Declarar una cola que NO se auto-borre (autoDelete: false)
+        // pero SÍ sea exclusiva (exclusive: true)
         replyQueueName = channel.queueDeclare("", false, true, false, null).getQueue();
         // --- FIN DE LA CORRECCIÓN ---
 
@@ -37,7 +39,6 @@ public class RpcClient implements AutoCloseable {
 
         final BlockingQueue<String> responseQueue = new ArrayBlockingQueue<>(1);
 
-        // El callback para poner la respuesta en la cola
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
             if (delivery.getProperties().getCorrelationId().equals(corrId)) {
                 responseQueue.offer(new String(delivery.getBody(), "UTF-8"));
@@ -49,11 +50,11 @@ public class RpcClient implements AutoCloseable {
 
         // Publicar la petición
         channel.basicPublish("exchange_principal", routingKey, props, message.getBytes("UTF-8"));
-        
+
         // Esperar la respuesta (con timeout)
         String response = responseQueue.poll(10, java.util.concurrent.TimeUnit.SECONDS);
-        
-        // Cancelar la suscripción (esto ya no borrará la cola)
+
+        // Cancelar la suscripción
         channel.basicCancel(ctag);
 
         if (response == null) {
@@ -64,6 +65,7 @@ public class RpcClient implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        connection.close(); // Al cerrar la conexión, la cola (marcada como 'exclusive') se borrará.
+        // Al cerrar la conexión, la cola (marcada como 'exclusive') se borrará.
+        connection.close();
     }
 }

@@ -6,7 +6,7 @@ import psycopg2
 from psycopg2 import pool
 
 # --- CONFIGURACIÓN (leída desde Docker-Compose) ---
-RABBIT_URL = os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672')
+RABBIT_URL = os.getenv('RABBITMQ_URL', 'amqp://shibasito_user:shibasito_password@localhost:5672')
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_NAME = os.getenv('DB_NAME', 'bd1_banco')
 DB_USER = os.getenv('DB_USER', 'shibasito_user')
