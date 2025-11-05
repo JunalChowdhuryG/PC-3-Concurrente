@@ -26,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTransferir: Button
     private lateinit var btnActualizar: Button
 
+    private lateinit var btnCambiarIp: Button
+
     // --- Variables de Lógica ---
     private val gson = GsonBuilder().setPrettyPrinting().create()
     private var clienteIdLogueado: String = "CL001"
@@ -52,6 +54,7 @@ class MainActivity : AppCompatActivity() {
         etMonto = findViewById(R.id.etMonto)
         btnTransferir = findViewById(R.id.btnTransferir)
         btnActualizar = findViewById(R.id.btnActualizar)
+        btnCambiarIp = findViewById(R.id.btnCambiarIp)
 
         tvBienvenida.text = "Bienvenido, $clienteIdLogueado"
         log("App iniciada. Host: $rabbitMqHostIp. Usuario: $clienteIdLogueado")
@@ -72,8 +75,27 @@ class MainActivity : AppCompatActivity() {
             """.trimIndent()
             executeRpc("banco.transferir", payload)
         }
+
+        btnCambiarIp.setOnClickListener {
+            // 1. Borrar la IP guardada
+            val prefs = getSharedPreferences(IpConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove(IpConfigActivity.KEY_RABBITMQ_IP)
+                .apply()
+
+            log("IP borrada. Reiniciando a Configuración.")
+
+            // 2. Reiniciar la app volviendo a la pantalla de IP
+            val intent = Intent(this, IpConfigActivity::class.java)
+            // Estas "flags" limpian el historial de pantallas
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish() // Cierra esta actividad
+        }
         cargarDatosDelBanco()
     }
+
+
 
     private fun cargarDatosDelBanco() {
         log("Actualizando datos del banco...")
