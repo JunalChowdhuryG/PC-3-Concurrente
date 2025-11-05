@@ -31,8 +31,7 @@
             android:exported="false" />
 
         <activity
-            android:name=".SuccessAnimationActivity"
-            android:exported="false"
+            android:name=".TransferReceiptActivity" android:exported="false"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
     </application>
 </manifest>

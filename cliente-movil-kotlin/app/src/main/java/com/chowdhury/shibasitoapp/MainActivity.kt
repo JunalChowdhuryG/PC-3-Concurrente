@@ -1,7 +1,8 @@
 package com.chowdhury.shibasitoapp
 
-import android.os.Bundle
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -9,7 +10,6 @@ import androidx.appcompat.app.AlertDialog
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import kotlinx.coroutines.*
-import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
@@ -26,12 +26,14 @@ class MainActivity : AppCompatActivity() {
     private val gson = GsonBuilder().setPrettyPrinting().create()
 
     private var clienteIdLogueado: String = "CL001" // Default
+    // Variables para capturar los datos de la transferencia antes de enviarlos
+    private var lastTransferMonto: Double = 0.0
+    private var lastTransferDestino: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 1. Recibir el ID de Cliente desde el Login
         clienteIdLogueado = intent.getStringExtra("CLIENTE_ID") ?: "CL001"
 
         // Enlazar vistas
@@ -42,7 +44,6 @@ class MainActivity : AppCompatActivity() {
         btnConsultarSaldo = findViewById(R.id.btnConsultarSaldo)
         tvLogs = findViewById(R.id.tvLogs)
 
-        // 2. Establecer el ID de Cliente en la UI
         etClienteOrigen.setText(clienteIdLogueado)
 
         log("App iniciada. Host: $RABBITMQ_HOST_IP")
@@ -51,9 +52,14 @@ class MainActivity : AppCompatActivity() {
         // Configurar botones
         btnTransferir.setOnClickListener {
             val idDestino = etClienteDestino.text.toString()
-            val monto = etMonto.text.toString()
+            val montoStr = etMonto.text.toString()
+
+            // Guardar los datos antes de la llamada RPC
+            lastTransferMonto = montoStr.toDoubleOrNull() ?: 0.0
+            lastTransferDestino = idDestino
+
             val payload = """
-                {"idClienteOrigen": "$clienteIdLogueado", "idClienteDestino": "$idDestino", "monto": $monto}
+                {"idClienteOrigen": "$clienteIdLogueado", "idClienteDestino": "$idDestino", "monto": $montoStr}
             """.trimIndent()
             executeRpc("banco.transferir", payload)
         }
@@ -80,7 +86,6 @@ class MainActivity : AppCompatActivity() {
                     val response = rpcClient.call(routingKey, payload)
                     log("<- [BG] Respuesta Recibida: $response")
                     withContext(Dispatchers.Main) {
-                        // 3. Pasar el routingKey para saber si es transferencia
                         showAlert(response, routingKey)
                     }
                 }
@@ -101,13 +106,22 @@ class MainActivity : AppCompatActivity() {
             val jsonElement = JsonParser.parseString(responseJson)
             val isError = responseJson.contains("\"status\":\"ERROR\"")
 
-            // 4. Lógica para la Animación
             if (!isError && routingKey == "banco.transferir") {
-                // ¡ÉXITO DE TRANSFERENCIA! Lanzar la animación.
-                val intent = Intent(this, SuccessAnimationActivity::class.java)
+                // Parsear la respuesta para obtener el nuevo saldo
+                val responseObj = gson.fromJson(responseJson, Map::class.java)
+                val data = responseObj["data"] as? Map<*, *>
+                val nuevoSaldo = (data?.get("nuevo_saldo") as? Double) ?: 0.0
+
+                // Lanzar la nueva actividad de recibo con los datos
+                val intent = Intent(this, TransferReceiptActivity::class.java).apply {
+                    putExtra("MONTO", lastTransferMonto)
+                    putExtra("ID_ORIGEN", clienteIdLogueado)
+                    putExtra("ID_DESTINO", lastTransferDestino)
+                    putExtra("NUEVO_SALDO", nuevoSaldo)
+                }
                 startActivity(intent)
             } else {
-                // Mostrar el popup normal para todo lo demás
+                // Mostrar el popup normal para errores o consultas de saldo
                 val prettyJson = gson.toJson(jsonElement)
                 val title = if (isError) "Error del Servidor" else "Respuesta Exitosa"
                 AlertDialog.Builder(this)
