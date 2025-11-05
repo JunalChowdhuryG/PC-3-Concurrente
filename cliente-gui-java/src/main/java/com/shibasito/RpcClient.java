@@ -16,36 +16,32 @@ public class RpcClient implements AutoCloseable {
     public RpcClient(String hostIp) throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(hostIp);
+        // Usamos 'guest' (permitido gracias a loopback_users = none)
         factory.setUsername("guest");
         factory.setPassword("guest");
 
-        // Conectarse a RabbitMQ (que está en Docker)
+        // Conectarse a RabbitMQ (que está en tu PC)
         connection = factory.newConnection();
         channel = connection.createChannel();
 
-        // Crear una cola de respuesta temporal, exclusiva y anónima
-        replyQueueName = channel.queueDeclare().getQueue();
+        // Crear una cola de respuesta temporal, exclusiva y que NO se auto-borre
+        replyQueueName = channel.queueDeclare("", false, true, false, null).getQueue();
         System.out.println("Cliente RPC conectado. Escuchando respuestas en: " + replyQueueName);
     }
 
     public String call(String routingKey, String message) throws IOException, InterruptedException {
         final String corrId = UUID.randomUUID().toString();
 
-        // Configurar las propiedades del mensaje (a dónde responder y el ID)
         AMQP.BasicProperties props = new AMQP.BasicProperties
                 .Builder()
                 .correlationId(corrId)
                 .replyTo(replyQueueName)
                 .build();
 
-        // Crear una "caja" (BlockingQueue) para esperar la respuesta
         final BlockingQueue<String> responseQueue = new ArrayBlockingQueue<>(1);
 
-        // Definir un consumidor que escuche en la cola de respuesta
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            // Cuando llegue un mensaje, verificar si es el que esperamos
             if (delivery.getProperties().getCorrelationId().equals(corrId)) {
-                // Si es, poner la respuesta en la "caja"
                 responseQueue.offer(new String(delivery.getBody(), "UTF-8"));
             }
         };
@@ -57,8 +53,8 @@ public class RpcClient implements AutoCloseable {
         System.out.println("-> [Hilo] Enviando Petición: " + routingKey);
         channel.basicPublish("exchange_principal", routingKey, props, message.getBytes("UTF-8"));
 
-        // Esperar la respuesta (con un timeout de 5 segundos)
-        String response = responseQueue.poll(5, java.util.concurrent.TimeUnit.SECONDS);
+        // Esperar la respuesta (con un timeout de 10 segundos)
+        String response = responseQueue.poll(10, java.util.concurrent.TimeUnit.SECONDS);
 
         // Dejar de consumir de la cola
         channel.basicCancel(ctag);
@@ -74,6 +70,7 @@ public class RpcClient implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        // Al cerrar la conexión, la cola (marcada como 'exclusive') se borrará.
         connection.close();
     }
 }

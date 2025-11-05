@@ -1,11 +1,9 @@
 {
   "name": "lp2-reniec-nodejs",
   "version": "1.0.0",
-  "description": "Servicio RENIEC para el Banco Shibasito",
+  "description": "Servicio RENIEC (LP2)",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
+  "scripts": { "start": "node index.js" },
   "dependencies": {
     "amqplib": "^0.10.3",
     "mysql2": "^3.6.1"
