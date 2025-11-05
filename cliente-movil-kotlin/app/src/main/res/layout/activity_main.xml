@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="86dp"
+    android:paddingTop="100dp"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:layout_width="236dp"
+        android:layout_height="wrap_content"
+        android:text="Shibasito - Yape"
+        android:textSize="25sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/etClienteOrigen"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:focusable="false"
+        android:clickable="false"
+        android:hint="Tu ID de Cliente (ej: CL001)"
+        android:inputType="text"
+        android:textStyle="bold"
+        android:text="CL001" />
+
+    <EditText
+        android:id="@+id/etClienteDestino"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="ID Cliente Destino (Sim QR)"
+        android:inputType="text"
+        android:text="CL002" />
+
+    <EditText
+        android:id="@+id/etMonto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="Monto a transferir"
+        android:inputType="numberDecimal"
+        android:text="50.00" />
+
+    <Button
+        android:id="@+id/btnTransferir"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Transferir (LP1)" />
+
+    <Button
+        android:id="@+id/btnConsultarSaldo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Consultar Saldo (LP1)" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Logs:"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="214dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/tvLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="Logs de la aplicación..." />
+    </ScrollView>
+
+</LinearLayout>
