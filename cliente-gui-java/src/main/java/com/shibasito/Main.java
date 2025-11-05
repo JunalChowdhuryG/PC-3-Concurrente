@@ -18,7 +18,7 @@ public class Main extends Application {
     private static final String RABBITMQ_HOST_IP = "192.168.0.9";
 
     private TextArea logArea = new TextArea();
-    private ObjectMapper jsonMapper = new ObjectMapper(); // Para formatear el JSON
+    private ObjectMapper jsonMapper = new ObjectMapper();
 
     public static void main(String[] args) {
         launch(args);
@@ -33,7 +33,7 @@ public class Main extends Application {
         logArea.setWrapText(true);
         logArea.setPrefHeight(200);
 
-        // Panel de RENIEC
+        // --- Panel de RENIEC (Sin cambios) ---
         GridPane reniecPane = new GridPane();
         reniecPane.setPadding(new Insets(10));
         reniecPane.setHgap(10);
@@ -45,17 +45,33 @@ public class Main extends Application {
         reniecPane.add(reniecDniField, 1, 0);
         reniecPane.add(reniecButton, 2, 0);
 
-        // Panel de BANCO
+        // --- Panel de BANCO (Actualizado) ---
         GridPane bancoPane = new GridPane();
         bancoPane.setPadding(new Insets(10));
         bancoPane.setHgap(10);
         bancoPane.setVgap(10);
-        Label bancoLabel = new Label("ID Cliente:");
+        
+        Label bancoIdLabel = new Label("ID Cliente:");
         TextField bancoIdField = new TextField("CL001");
-        Button bancoButton = new Button("Consultar Saldo (LP1)");
-        bancoPane.add(bancoLabel, 0, 0);
-        bancoPane.add(bancoIdField, 1, 0);
-        bancoPane.add(bancoButton, 2, 0);
+        
+        Label montoLabel = new Label("Monto:");
+        TextField montoField = new TextField("500.00"); // Campo para el préstamo
+
+        Button saldoButton = new Button("Consultar Saldo");
+        Button historialButton = new Button("Ver Historial");
+        Button prestamoButton = new Button("Solicitar Préstamo");
+
+        // Fila 1: ID Cliente
+        bancoPane.add(bancoIdLabel, 0, 0);
+        bancoPane.add(bancoIdField, 1, 0, 2, 1); // Ocupa 2 columnas
+        // Fila 2: Botones de consulta
+        bancoPane.add(saldoButton, 1, 1);
+        bancoPane.add(historialButton, 2, 1);
+        // Fila 3: Préstamo
+        bancoPane.add(montoLabel, 0, 2);
+        bancoPane.add(montoField, 1, 2);
+        bancoPane.add(prestamoButton, 2, 2);
+
 
         // --- Lógica de los Botones ---
 
@@ -65,19 +81,42 @@ public class Main extends Application {
             ejecutarRpc("reniec.validar", payload);
         });
 
-        bancoButton.setOnAction(e -> {
+        saldoButton.setOnAction(e -> {
             String idCliente = bancoIdField.getText();
             String payload = String.format("{\"idCliente\": \"%s\"}", idCliente);
             ejecutarRpc("banco.consulta.saldo", payload);
         });
 
+        // --- NUEVA LÓGICA DE BOTONES ---
+        
+        historialButton.setOnAction(e -> {
+            String idCliente = bancoIdField.getText();
+            String payload = String.format("{\"idCliente\": \"%s\"}", idCliente);
+            ejecutarRpc("banco.historial", payload);
+        });
+
+        prestamoButton.setOnAction(e -> {
+            String idCliente = bancoIdField.getText();
+            String monto = montoField.getText();
+            // Validar que el monto sea un número
+            try {
+                Double.parseDouble(monto); // Solo para validar
+            } catch (NumberFormatException ex) {
+                log("Error: El monto debe ser un número válido.");
+                mostrarRespuesta("{\"status\":\"ERROR\", \"message\":\"El monto debe ser un número válido (ej: 500.00)\"}");
+                return;
+            }
+            String payload = String.format("{\"idCliente\": \"%s\", \"monto\": %s}", idCliente, monto);
+            ejecutarRpc("banco.prestamo.solicitar", payload);
+        });
+
         // Layout principal
         VBox root = new VBox(10, reniecPane, bancoPane, logArea);
         root.setPadding(new Insets(10));
-        primaryStage.setScene(new Scene(root, 600, 400));
+        primaryStage.setScene(new Scene(root, 600, 450)); // Hice la ventana un poco más alta
         primaryStage.show();
 
-        if (RABBITMQ_HOST_IP.equals("WIFI")) {
+        if (RABBITMQ_HOST_IP.equals("TU_IP_WIFI_AQUI")) {
             log("ERROR: Por favor edita el archivo Main.java y pon tu IP de Wi-Fi.");
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error de Configuración");
@@ -98,14 +137,11 @@ public class Main extends Application {
     private void ejecutarRpc(String routingKey, String payload) {
         log(String.format("-> [Hilo] Enviando Petición: %s | Body: %s", routingKey, payload));
 
-        // Crear una Tarea (Task) para ejecutar el RPC en un hilo de fondo
         Task<String> rpcTask = new Task<>() {
             @Override
             protected String call() throws Exception {
-                // Usar 'try-with-resources' para cerrar la conexión automáticamente
+                // (Ya no necesitamos el Thread.sleep(1000) porque el backend ya está corriendo)
                 try (RpcClient rpcClient = new RpcClient(RABBITMQ_HOST_IP)) {
-                    // Prevenir 'race condition'
-                    Thread.sleep(1000);
                     return rpcClient.call(routingKey, payload);
                 }
             }
@@ -132,19 +168,19 @@ public class Main extends Application {
             try {
                 Object json = jsonMapper.readValue(responseJson, Object.class);
                 String prettyJson = jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-
-                Alert.AlertType alertType = responseJson.contains("\"status\":\"ERROR\"") ?
-                        Alert.AlertType.ERROR : Alert.AlertType.INFORMATION;
+                
+                Alert.AlertType alertType = responseJson.contains("\"status\":\"ERROR\"") ? 
+                                             Alert.AlertType.ERROR : Alert.AlertType.INFORMATION;
 
                 Alert alert = new Alert(alertType);
                 alert.setTitle("Respuesta del Servidor");
                 alert.setHeaderText(null);
-
+                
                 TextArea textArea = new TextArea(prettyJson);
                 textArea.setEditable(false);
                 textArea.setWrapText(true);
                 alert.getDialogPane().setContent(textArea);
-
+                
                 alert.showAndWait();
 
             } catch (Exception e) {
