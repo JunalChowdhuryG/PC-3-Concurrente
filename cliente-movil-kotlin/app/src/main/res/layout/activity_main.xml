@@ -4,34 +4,73 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="86dp"
-    android:paddingTop="100dp"
+    android:padding="16dp"
     tools:context=".MainActivity">
 
     <TextView
-        android:layout_width="236dp"
+        android:id="@+id/tvBienvenida"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Shibasito - Yape"
-        android:textSize="25sp"
+        android:text="Bienvenido, CL001"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
-    <EditText
-        android:id="@+id/etClienteOrigen"
-        android:layout_width="match_parent"
+    <TextView
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:focusable="false"
-        android:clickable="false"
-        android:hint="Tu ID de Cliente (ej: CL001)"
-        android:inputType="text"
+        android:text="Saldo Actual:"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp" />
+
+    <TextView
+        android:id="@+id/tvSaldo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="S/ --.--"
+        android:textSize="34sp"
         android:textStyle="bold"
-        android:text="CL001" />
+        android:textColor="@android:color/holo_green_light" />
+
+    <Button
+        android:id="@+id/btnActualizar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Actualizar Datos"
+        android:layout_gravity="end" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Historial de Movimientos:"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:background="#222222"
+        android:padding="8dp">
+        <TextView
+            android:id="@+id/tvHistorial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="Cargando historial..." />
+    </ScrollView>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Transferir (Sim Yape)"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp"
+        android:textStyle="bold" />
 
     <EditText
         android:id="@+id/etClienteDestino"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:hint="ID Cliente Destino (Sim QR)"
         android:inputType="text"
         android:text="CL002" />
@@ -40,7 +79,6 @@
         android:id="@+id/etMonto"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:hint="Monto a transferir"
         android:inputType="numberDecimal"
         android:text="50.00" />
@@ -49,32 +87,6 @@
         android:id="@+id/btnTransferir"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Transferir (LP1)" />
-
-    <Button
-        android:id="@+id/btnConsultarSaldo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Consultar Saldo (LP1)" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Logs:"
-        android:textStyle="bold" />
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="214dp"
-        android:layout_weight="1">
-
-        <TextView
-            android:id="@+id/tvLogs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="Logs de la aplicación..." />
-    </ScrollView>
+        android:text="Transferir" />
 
 </LinearLayout>

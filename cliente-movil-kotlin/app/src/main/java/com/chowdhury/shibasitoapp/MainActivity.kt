@@ -1,5 +1,6 @@
 package com.chowdhury.shibasitoapp
 
+import android.content.Context
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -9,52 +10,60 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.*
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private val RABBITMQ_HOST_IP = "192.168.0.9" // (Tu IP)
-
-    // UI Elements
-    private lateinit var etClienteOrigen: EditText
+    // --- Variables de UI ---
+    private lateinit var tvBienvenida: TextView
+    private lateinit var tvSaldo: TextView
+    private lateinit var tvHistorial: TextView
     private lateinit var etClienteDestino: EditText
     private lateinit var etMonto: EditText
     private lateinit var btnTransferir: Button
-    private lateinit var btnConsultarSaldo: Button
-    private lateinit var tvLogs: TextView
+    private lateinit var btnActualizar: Button
 
+    // --- Variables de Lógica ---
     private val gson = GsonBuilder().setPrettyPrinting().create()
+    private var clienteIdLogueado: String = "CL001"
+    private var rabbitMqHostIp: String = "localhost"
 
-    private var clienteIdLogueado: String = "CL001" // Default
-    // Variables para capturar los datos de la transferencia antes de enviarlos
     private var lastTransferMonto: Double = 0.0
     private var lastTransferDestino: String = ""
+
+    private val dateParser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val prefs = getSharedPreferences(IpConfigActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        rabbitMqHostIp = prefs.getString(IpConfigActivity.KEY_RABBITMQ_IP, "localhost")!!
         clienteIdLogueado = intent.getStringExtra("CLIENTE_ID") ?: "CL001"
 
-        // Enlazar vistas
-        etClienteOrigen = findViewById(R.id.etClienteOrigen)
+        tvBienvenida = findViewById(R.id.tvBienvenida)
+        tvSaldo = findViewById(R.id.tvSaldo)
+        tvHistorial = findViewById(R.id.tvHistorial)
         etClienteDestino = findViewById(R.id.etClienteDestino)
         etMonto = findViewById(R.id.etMonto)
         btnTransferir = findViewById(R.id.btnTransferir)
-        btnConsultarSaldo = findViewById(R.id.btnConsultarSaldo)
-        tvLogs = findViewById(R.id.tvLogs)
+        btnActualizar = findViewById(R.id.btnActualizar)
 
-        etClienteOrigen.setText(clienteIdLogueado)
+        tvBienvenida.text = "Bienvenido, $clienteIdLogueado"
+        log("App iniciada. Host: $rabbitMqHostIp. Usuario: $clienteIdLogueado")
 
-        log("App iniciada. Host: $RABBITMQ_HOST_IP")
-        log("Usuario logueado: $clienteIdLogueado")
+        btnActualizar.setOnClickListener {
+            cargarDatosDelBanco()
+        }
 
-        // Configurar botones
         btnTransferir.setOnClickListener {
             val idDestino = etClienteDestino.text.toString()
             val montoStr = etMonto.text.toString()
 
-            // Guardar los datos antes de la llamada RPC
             lastTransferMonto = montoStr.toDoubleOrNull() ?: 0.0
             lastTransferDestino = idDestino
 
@@ -63,37 +72,37 @@ class MainActivity : AppCompatActivity() {
             """.trimIndent()
             executeRpc("banco.transferir", payload)
         }
+        cargarDatosDelBanco()
+    }
 
-        btnConsultarSaldo.setOnClickListener {
-            val payload = """
-                {"idCliente": "$clienteIdLogueado"}
-            """.trimIndent()
-            executeRpc("banco.consulta.saldo", payload)
-        }
+    private fun cargarDatosDelBanco() {
+        log("Actualizando datos del banco...")
+        tvSaldo.text = "Cargando..."
+        tvHistorial.text = "Cargando..."
+        executeRpc("banco.consulta.saldo", """{"idCliente": "$clienteIdLogueado"}""")
+        executeRpc("banco.historial", """{"idCliente": "$clienteIdLogueado"}""")
     }
 
     private fun log(message: String) {
-        runOnUiThread {
-            tvLogs.append("\n$message")
-        }
+        println(message)
     }
 
     private fun executeRpc(routingKey: String, payload: String) {
         log("-> [BG] Enviando Petición: $routingKey")
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                RpcClient(RABBITMQ_HOST_IP).use { rpcClient ->
+                RpcClient(rabbitMqHostIp).use { rpcClient ->
                     val response = rpcClient.call(routingKey, payload)
                     log("<- [BG] Respuesta Recibida: $response")
                     withContext(Dispatchers.Main) {
-                        showAlert(response, routingKey)
+                        handleRpcResponse(response, routingKey)
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 log("Error en hilo RPC: ${e.message}")
                 withContext(Dispatchers.Main) {
-                    showAlert("""
+                    handleRpcResponse("""
                         {"status":"ERROR", "message":"${e.message}"}
                     """.trimIndent(), routingKey)
                 }
@@ -101,41 +110,96 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showAlert(responseJson: String, routingKey: String) {
+    // --- FUNCIÓN CORREGIDA ---
+    private fun handleRpcResponse(responseJson: String, routingKey: String) {
         try {
             val jsonElement = JsonParser.parseString(responseJson)
-            val isError = responseJson.contains("\"status\":\"ERROR\"")
+            val responseObj = jsonElement.asJsonObject
+            val isError = responseObj.get("status").asString == "ERROR"
 
-            if (!isError && routingKey == "banco.transferir") {
-                // Parsear la respuesta para obtener el nuevo saldo
-                val responseObj = gson.fromJson(responseJson, Map::class.java)
-                val data = responseObj["data"] as? Map<*, *>
-                val nuevoSaldo = (data?.get("nuevo_saldo") as? Double) ?: 0.0
-
-                // Lanzar la nueva actividad de recibo con los datos
-                val intent = Intent(this, TransferReceiptActivity::class.java).apply {
-                    putExtra("MONTO", lastTransferMonto)
-                    putExtra("ID_ORIGEN", clienteIdLogueado)
-                    putExtra("ID_DESTINO", lastTransferDestino)
-                    putExtra("NUEVO_SALDO", nuevoSaldo)
-                }
-                startActivity(intent)
-            } else {
-                // Mostrar el popup normal para errores o consultas de saldo
-                val prettyJson = gson.toJson(jsonElement)
-                val title = if (isError) "Error del Servidor" else "Respuesta Exitosa"
-                AlertDialog.Builder(this)
-                    .setTitle(title)
-                    .setMessage(prettyJson)
-                    .setPositiveButton("OK", null)
-                    .show()
+            if (isError) {
+                // Los errores SÍ se muestran como popup
+                showErrorAlert(responseObj.get("message").asString)
+                if (routingKey == "banco.consulta.saldo") tvSaldo.text = "Error"
+                if (routingKey == "banco.historial") tvHistorial.text = "Error al cargar"
+                return
             }
+
+            // --- CORRECCIÓN ---
+            // Movemos la extracción de 'data' DENTRO del 'when'
+
+            when (routingKey) {
+                "banco.consulta.saldo" -> {
+                    // Aquí 'data' SÍ es un Objeto
+                    val data = responseObj.get("data").asJsonObject
+                    val saldo = data.get("saldo").asDouble
+                    tvSaldo.text = "S/ %.2f".format(saldo)
+                }
+
+                "banco.historial" -> {
+                    // Aquí 'data' es un Array
+                    val historialArray = responseObj.get("data").asJsonArray
+                    if (historialArray.size() == 0) {
+                        tvHistorial.text = "No hay movimientos."
+                        return // Salir temprano si no hay nada que mostrar
+                    }
+
+                    val historialTexto = StringBuilder()
+                    for (item in historialArray) {
+                        val transaccion = item.asJsonObject
+                        // (Manejar el caso de que 'fecha' sea null si la BD lo permite)
+                        val fechaStr = transaccion.get("fecha")?.asString ?: "fecha-desconocida"
+                        val tipo = transaccion.get("tipo")?.asString ?: "tipo-desconocido"
+                        val monto = transaccion.get("monto")?.asString ?: "0.00"
+
+                        // Formatear la fecha
+                        try {
+                            val fecha = dateParser.parse(fechaStr)
+                            val fechaFormateada = dateFormatter.format(fecha!!)
+                            historialTexto.append("$fechaFormateada - $tipo: S/ $monto\n")
+                        } catch (e: Exception) {
+                            historialTexto.append("$fechaStr - $tipo: S/ $monto\n")
+                        }
+                    }
+                    tvHistorial.text = historialTexto.toString()
+                }
+
+                "banco.transferir" -> {
+                    // Aquí 'data' es un Objeto
+                    val data = responseObj.get("data").asJsonObject
+                    val nuevoSaldo = data.get("nuevo_saldo").asDouble
+
+                    // Actualizar el saldo en la UI inmediatamente
+                    tvSaldo.text = "S/ %.2f".format(nuevoSaldo)
+
+                    // Lanzar la actividad de recibo
+                    val intent = Intent(this, TransferReceiptActivity::class.java).apply {
+                        putExtra("MONTO", lastTransferMonto)
+                        putExtra("ID_ORIGEN", clienteIdLogueado)
+                        putExtra("ID_DESTINO", lastTransferDestino)
+                        putExtra("NUEVO_SALDO", nuevoSaldo)
+                    }
+                    startActivity(intent)
+
+                    // (Opcional) Recargar el historial después de la transferencia
+                    executeRpc("banco.historial", """{"idCliente": "$clienteIdLogueado"}""")
+                }
+            }
+
         } catch (e: Exception) {
-            AlertDialog.Builder(this)
-                .setTitle("Error de Formato")
-                .setMessage(responseJson)
-                .setPositiveButton("OK", null)
-                .show()
+            // Este es el error que estabas viendo
+            showErrorAlert("Error al procesar respuesta: ${e.message}")
+            if (routingKey == "banco.historial") {
+                tvHistorial.text = "Error: La respuesta no es un JSON válido."
+            }
         }
+    }
+
+    private fun showErrorAlert(message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Error")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show()
     }
 }
